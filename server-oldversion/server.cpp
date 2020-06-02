@@ -1,9 +1,9 @@
+
 #include "pch.h"
 #include "framework.h"
 #include "server.h"
 #include "afxsock.h"
 #include <string>
-
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -46,7 +46,7 @@ int main()
 				cout << "Socket init function failed with errors:  " << GetLastError() << endl;
 				exit(1);
 			}
-
+			char logout[11] = { 'l','o','g','g','e','d',' ','o','u','t','\0' };
 			int n;
 			cout << "Input the number of clients: ";
 			cin >> n;
@@ -76,14 +76,14 @@ int main()
 				}
 
 				// accept 
-				for (int i = 0; i < n; i++)
+				for (int i = 0; i < n; i++)  //receive ten cua cac user roi in ra man hinh
 				{
 					if (m_Server.Accept(m_Client[i]))
 					{
 						char* buffer;
-						int lenName = strlen(user[i].m_Name);
+						int lenName;
 
-						m_Client[i].Receive((char*)&lenName, sizeof(int), 0);
+						m_Client[i].Receive((char*)& lenName, sizeof(int), 0);
 						buffer = new char[lenName + 1];
 						m_Client[i].Receive((char*)buffer, lenName, 0);
 						buffer[lenName] = '\0';
@@ -101,20 +101,19 @@ int main()
 				char* buffer = "0";
 
 				cout << "Enter # to end the connection" << endl;
-				do {
 					do
 					{
 						for (int i = 0; i < n; i++)
 						{
-							if (1)
-							{
+							
 								/*do
 								{*/
-								m_Client[i].Receive((char*)&lenMsg, sizeof(int), 0);
+								m_Client[i].Receive((char*)& lenMsg, sizeof(int), 0);
 								buffer = new char[lenMsg + 1];
 								m_Client[i].Receive((char*)buffer, lenMsg, 0);
 								buffer[lenMsg] = '\0';
-								cout << user[i].m_Name << " : " << buffer << endl;
+								if (lenMsg != 0)
+									cout << user[i].m_Name << " : " << buffer << endl;
 
 								if (*buffer == '#') //client[i] logged out
 								{
@@ -123,49 +122,50 @@ int main()
 									m_Client[i].Close();
 									isExisted--;
 									char* temp = new char[100];
-									temp = user[i].m_Name + 'logg' + 'ed' + ' out';
+									temp = user[i].m_Name + ' log' + 'ged ' + 'out ' + '\0';
 									int lentemp = strlen(temp);
 
 									//Gui cho cac client khac client[i] logged out
 									for (int j = 0; j < n; j++)
 									{
-										if (j == i && j != n - 1)
-											j++;
-										else if (j == i && j == n - 1)
-											break;
-										m_Client[j].Send(&lentemp, sizeof(lentemp), 0);
-										m_Client[j].Send(temp, lentemp, 0);
+										if (j != i)
+										{
+											m_Client[j].Send(&lentemp, sizeof(lentemp), 0);
+											m_Client[j].Send(temp, lentemp, 0);
+										}
 									}
 								}
 								for (int j = 0; j < n; j++) //client[i] tiep tuc chat
 								{
-									if (j == i) j++;
-									m_Client[j].Send(&lenMsg, sizeof(lenMsg), 0);
-									m_Client[j].Send(buffer, lenMsg, 0);
 
+									if (j != i)
+									{
+										char* temp = new char[strlen(user[i].m_Name) + strlen(buffer) + 2];
+
+										m_Client[j].Send(&lenMsg, sizeof(lenMsg), 0);
+										m_Client[j].Send(buffer, lenMsg, 0);
+									}
 								}
-								/*} while (buffer[lenMsg - 1] != '*');*/
-							}
+							
 						}
-
+						
 					} while (isExisted);
 
-					//do {
-					//	cout << "Server: ";
-					//	cin.getline(sendMsg, 1024);
-					//	lenMsg = strlen(sendMsg);
-					//	m_Client.Send(&lenMsg, sizeof(lenMsg), 0);
-					//	m_Client.Send(sendMsg, lenMsg, 0);
+					/*do {
+						cout << "Server: ";
+						cin.getline(sendMsg, 1024);
+						lenMsg = strlen(sendMsg);
+						m_Client.Send(&lenMsg, sizeof(lenMsg), 0);
+						m_Client.Send(sendMsg, lenMsg, 0);
 
-					//	if (sendMsg[lenMsg - 1] == '*')
-					//		break;
-					//	if (*sendMsg == '#')
-					//	{
-					//		cout << "Server connection is terminated " << endl;
-					//		isExisted = TRUE;
-					//	}
-					//} while (*sendMsg != '#');
-				} while (!isExisted);
+						if (sendMsg[lenMsg - 1] == '*')
+							break;
+						if (*sendMsg == '#')
+						{
+							cout << "Server connection is terminated " << endl;
+							isExisted = TRUE;
+						}
+					} while (*sendMsg != '#');*/
 			}
 			for (int i = 0; i < n; i++)
 			{

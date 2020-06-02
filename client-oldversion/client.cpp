@@ -6,6 +6,8 @@
 #include "client.h"
 #include "afxsock.h"
 #include <string.h>
+#include <thread>
+#include <mutex>
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -23,6 +25,54 @@ struct User
 	char m_Name[30];
 	char m_Password[30];
 };
+
+void Sending(CSocket &m_Client, User user)
+{
+	char sendMsg[1024] = { 0 };
+	int lenMsg;
+	while (*sendMsg != '#')
+	{
+		//fflush(stdin);
+		cin.getline(sendMsg, 1024);
+		cout << user.m_Name << ": ";
+		cin.getline(sendMsg, 1024);
+		lenMsg = strlen(sendMsg);
+		m_Client.Send(&lenMsg, sizeof(lenMsg), 0);
+		m_Client.Send(sendMsg, lenMsg, 0);
+
+		if (*sendMsg == '#')
+		{
+			cout << "\nLogged out." << endl;
+			m_Client.Close();
+			break;
+			//isExit = TRUE;
+		}
+	}
+}
+
+void Receiving(CSocket &m_Client)
+{
+	char* buffer = "0";
+	int lenMsg;
+	do
+	{
+		m_Client.Receive((char*)& lenMsg, sizeof(int), 0);
+		buffer = new char[lenMsg + 1];
+		m_Client.Receive((char*)buffer, lenMsg, 0);
+
+		cout << buffer << endl;
+	} while (*buffer != '#');
+}
+thread sendMsg(CSocket& m_Client, User user)
+{
+	Sending(m_Client,user);
+}
+
+thread receiveMsg(CSocket& m_Client)
+{
+	Receiving(m_Client);
+}
+
 int main()
 {
 	int nRetCode = 0;
@@ -57,11 +107,11 @@ int main()
 
 			User user;
 			//do {
-			cout << "SIGN IN" << endl;
-			cout << "ID: ";
-			cin >> user.m_Name;
-			cout << "Password ";
-			cin >> user.m_Password;
+				cout << "SIGN IN" << endl;
+				cout << "ID: ";
+				cin >> user.m_Name;
+				cout << "Password ";
+				cin >> user.m_Password;
 			//} while (!checkUser(user.m_Name, user.m_Password));
 
 			//connect 
@@ -74,15 +124,22 @@ int main()
 				//ID
 				m_Client.Send(&lenName, sizeof(lenName), 0);
 				m_Client.Send(user.m_Name, lenName, 0);
-
+	
 				//start sending and receiving msg
 				cout << "Enter # to end the connection " << endl;
-				char sendMsg[1024];
-				int lenMsg;
-				char* buffer = "0";
-				do
-				{
-					do
+				
+					/*thread sendingMsg(Sending, m_Client, user);
+					thread receivingMsg(Receiving, m_Client);*/
+				/*	Sending( m_Client, user);
+					Receiving(m_Client);*/
+				thread SendMsg = new thread;
+				SendMsg = sendMsg(m_Client, user);
+					receiveMsg(m_Client);
+					if (sendMsg.joinable())
+						sendMsg.join();
+					if (receiveMsg.joinable())
+						receiveMsg.join();
+					/*do
 					{
 						cout << user.m_Name << ": ";
 						cin.getline(sendMsg, 1024);
@@ -95,14 +152,14 @@ int main()
 							cout << "\nLogged out." << endl;
 							isExit = TRUE;
 						}
-					} while (*sendMsg != '#');
+					} while (*sendMsg != '#');*/
 
 
-					do
+					/*do
 					{
-						m_Client.Receive((char*)&lenMsg, sizeof(int), 0);
+						m_Client.Receive((char*)& lenMsg, sizeof(int), 0);
 						buffer = new char[lenMsg + 1];
-						m_Client.Receive((char*)buffer, lenMsg, 0);
+	 					m_Client.Receive((char*)buffer, lenMsg, 0);
 						buffer[lenMsg] = '\0';
 						cout << "Server: " << buffer << endl;
 						if (buffer[lenMsg - 1] == '*') break;
@@ -111,8 +168,9 @@ int main()
 							cout << "Server connection is terminated.\n" << endl;
 							isExit = TRUE;
 						}
-					} while (*buffer != '#');
-				} while (!isExit);
+					} while (*buffer != '#');*/
+
+				
 			}
 			m_Client.Close();
 		}
