@@ -7,6 +7,9 @@
 #include <stdio.h>
 #include <iostream>
 #include <string.h>
+#include <cstring>
+#include <vector>
+#include <thread>
 
 // Need to link with Ws2_32.lib
 #pragma comment (lib, "Ws2_32.lib")
@@ -14,8 +17,25 @@
 
 #define LenMsg 1024
 #define PORT "8080"
-
+#define NumClient 100
 using namespace std;
+
+struct User
+{
+	string Id;
+	string Password;
+};
+vector <User>  UserList;
+vector <bool> isExisted;
+
+SOCKET ClientList[NumClient];
+thread ClientThread[NumClient];
+int count = 0;
+//---HAM HO TRO
+string FormatStr(char*& buffer, int& mode, string userName);
+bool checkUser(string name);
+void getUsername(int index);
+void run(int index);
 
 int main()
 {
@@ -62,6 +82,7 @@ int main()
 		return 1;
 	}
 
+	cout << "Server init successfully" << endl;
 	// Setup the TCP listening socket
 	iResult = bind(Server, result->ai_addr, (int)result->ai_addrlen);
 	if (iResult == SOCKET_ERROR)
@@ -82,74 +103,211 @@ int main()
 		WSACleanup();
 		return 1;
 	}
-
+	cout << "Looking for clients ... " << endl;
+	//int count = 0;
 	// Accept a client socket
-	Client = accept(Server, NULL, NULL);  //ham accept tra ve 1 SOCKET moi, ket noi client va server
-	if (Client == INVALID_SOCKET) {
-		printf("accept failed with error: %d\n", WSAGetLastError());
-		closesocket(Server);
-		WSACleanup();
-		return 1;
-	}
-
-
-	// Start send & recieve message 1-1 
-
-	// Server chat truoc
-	char sendMsg[LenMsg];
-	char* buffer = new char[1024];
-	int lenMsg;
-	do {
-		do {
-			// Server chat: server gui cho client
-			cout << "Server: ";
-			cin.getline(sendMsg, 1024);
-			lenMsg = strlen(sendMsg);
-			sendMsg[lenMsg] = '\0';
-			//iResult = send(Client, (char*)&lenMsg, sizeof(lenMsg), 0);
-			iResult = send(Client, sendMsg, sizeof(sendMsg), 0);
-
-			if (iResult == SOCKET_ERROR)
-			{
-				printf("send failed with error: %d\n", WSAGetLastError());
-				closesocket(Client);
-				WSACleanup();
-				return 1;
-			}
-		} while (*sendMsg != '*');
-
-		do {
-			// Client chat: server nhan tin nhan tu client va in ra
+	for (int i = 0; i < NumClient; i++)
+	{
+		SOCKET Client;
+		Client = accept(Server, NULL, NULL);  //ham accept tra ve 1 SOCKET moi, ket noi client va server
+		if (Client == INVALID_SOCKET)
+		{
+			printf("accept failed with error: %d\n", WSAGetLastError());
+			closesocket(Server);
+			WSACleanup();
+			return 1;
+		}
+		else
+		{
+		
+			ClientList[i] = Client;
 			
-			//iResult = recv(Client, (char*)& lenMsg, sizeof(lenMsg), 0);
-			//buffer = new char[lenMsg + 1];
-			iResult = recv(Client, buffer, 1024, 0);
-			//buffer[lenMsg] = '\0';
-			cout << " Client: " << buffer << endl;
-
-			if (*buffer == '#')
-			{
-				cout << "CLient disconnect." << endl;
-				break;
-			}
-
-			if (iResult == SOCKET_ERROR)
-			{
-				printf("send failed with error: %d\n", WSAGetLastError());
-				closesocket(Client);
-				WSACleanup();
-				return 1;
-			}
-		} while (*buffer != '*');
-	} while (*sendMsg != '#' and *buffer != '#');
-
-	cout << "End chat!!!" << endl;
-
+			
+			ClientThread[i] = thread(run, i);
+			
+		}
+	}
+	
 	// cleanup
-	delete[] buffer;
-	closesocket(Client);
+	//closesocket(Client);
 	closesocket(Server);
 	WSACleanup();
 
 	return 0;
+}
+
+void getUsername(int index)
+{
+	User newUser;
+	char name[30];
+	char buffname[50];
+	bool check = TRUE;
+	// Save data in Server
+	int iResult = recv(ClientList[index], name, 30, 0);
+	string temp = name;
+	temp = temp + " logged in" + "\0";
+	cout << temp << endl;
+	newUser.Id = name;
+
+	UserList.push_back(newUser);
+	isExisted.push_back(check);
+
+	for (int i = 0; i < temp.length(); i++)  //copy lai buff vao buffer
+	{
+		buffname[i] = temp[i];
+	}
+	buffname[temp.length()] = '\0';
+
+	// Send username to the other clients
+	for (int i = 0; i < ::count; i++)
+	{
+		if (i == index) continue;
+		if (isExisted[i])
+		{
+			iResult = send(ClientList[i], buffname, 50, 0);
+			if (iResult == SOCKET_ERROR)
+			{
+				printf("send failed with error: %d\n", WSAGetLastError());
+				closesocket(ClientList[index]);
+				WSACleanup();
+				return;
+			}
+		}
+	}
+
+}
+bool checkUser(string name)
+{
+	for (int i = 0; i < UserList.size(); i++)
+	{
+		if (UserList[i].Id == name)
+			return true;
+	}
+	return false;
+}
+void run(int index)
+{
+	
+	getUsername(index);
+	::count++;
+
+	char* temp = new char[LenMsg];
+	int iResult = recv(ClientList[index], temp, LenMsg, 0);
+	while (1)
+	{
+		int mode;
+		char* buffer = new char[LenMsg];
+		//receive(, msg);
+		int iResult = recv(ClientList[index], buffer, LenMsg, 0);
+
+		if (iResult == SOCKET_ERROR)
+		{
+			printf("recv failed with error: %d\n", WSAGetLastError());
+			closesocket(ClientList[index]);
+			WSACleanup();
+			return;
+		}
+
+		string name = FormatStr(buffer, mode, UserList[index].Id);
+		cout << buffer << endl;
+		// khi nhan # log out
+		if (mode == 2)
+		{
+			//gui cho nhung client khac
+			for (int i = 0; i < ::count; i++)
+			{
+				if (ClientList[i] == ClientList[index]) continue;
+				if (isExisted[i] == TRUE)
+				{
+					iResult = send(ClientList[i], buffer, LenMsg, 0);
+				}
+			}
+			// close socket
+			isExisted[index] = FALSE;
+			closesocket(ClientList[index]);
+			return;
+		}
+
+		// neu chat all thi gui cho may thang con lai
+		else if (mode == 0)
+		{
+			for (int i = 0; i < ::count; i++)
+			{
+				if (ClientList[i] == ClientList[index]) continue;
+				if (isExisted[i] == TRUE)
+				{
+					iResult = send(ClientList[i], buffer, LenMsg, 0);
+				}
+			}
+		}
+
+		//chat privately thì gui cho thang nhan
+		else if (mode == 1)
+		{
+			for (int i = 0; i < ::count; i++)
+			{
+				if (UserList[i].Id == name)
+				{
+					if (isExisted[i] == TRUE)
+					{
+						iResult = send(ClientList[i], buffer, LenMsg, 0);
+					}
+				}
+			}
+		}
+		delete[] buffer;
+	}
+	delete[] temp;
+	
+}
+
+string FormatStr(char*& buffer, int& mode, string userName)
+{
+	string name;
+	string buff = buffer;
+
+	if (buff[0] == '/')	// Chat private						
+	{
+		// buff = "/hoangminh hello"
+		buff.erase(buff.begin());  // buff = "hoangminh hello"
+		for (int i = 0; i < buff.length(); i++)
+		{
+			if (buff[i] == ' ')
+			{
+				name = buff.substr(0, i); // name = "hoangminh"
+				buff.erase(0, i + 1);		  // buff = "hello"
+				break;
+			}
+		}
+		if (checkUser(name))
+		{
+			buff = userName + " to " + name + " (privately): " + buff;
+			mode = 1;
+		}
+		else
+		{
+			buff = userName + ": " + "/" + name + buff;
+			mode = 0;
+			name = "ALL";
+		}
+	}
+	else if (buff[0] == '#')	// log out		
+	{
+		buff = userName + " logged out.";
+		mode = 2;
+	}
+	else  //chat chung ca dam
+	{
+		// buff = "Xin chao cac ban!"
+		name = "ALL";
+		buff = userName + ": " + buff;
+		mode = 0;
+	}
+
+	for (int i = 0; i < buff.length(); i++)  //copy lai buff vao buffer
+	{
+		buffer[i] = buff[i];
+	}
+	buffer[buff.length()] = '\0';
+	return name; // neu la chat private (A chat cho B) thi tra ve ten thang B, chat all thi tra ve "ALL"
 }
