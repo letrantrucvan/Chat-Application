@@ -290,75 +290,22 @@ void Client::receiving(SOCKET &Server)
 {
 	char* buffer = new char[LenMsg];
 	int iResult;
+	recvUserList(Server);
 	while (true)
 	{
-
-		//recvUserList(Server);
 		iResult = recv(Server, buffer, LenMsg, 0);
 
 		if (iResult == SOCKET_ERROR)
 		{
-			//printf("recv failed with error: %d\n", WSAGetLastError());
+			cout << "Recv failed with error: " << WSAGetLastError() << endl;
+			cout << "Your connection is terminated." << endl;
 			closesocket(Server);
 			WSACleanup();
 			return;
 		}
-
 		cout << buffer << endl;
 
-		//xu ly vactor cac user dang online
-		string buf = buffer;
-		if (buf.find(':') == -1)
-		{
-			string name = buf.substr(0, buf.find_first_of(' '));
-			buf.erase(0, buf.find_first_of(' ') + 1);
-			if (buf == "logged out")
-			{
-				for (int i = 0; i < onlineUser.size(); i++)
-				{
-					if (onlineUser[i] == name)
-					{
-						onlineUser.erase(onlineUser.begin() + i);
-					}
-				}
-			}
-			else if (buf == "logged in")
-			{
-				onlineUser.push_back(name);
-			}
-		}
-
-
-
-		if (*buffer == '+') //nhan File
-		{
-			int size;
-			recv(Server, (char*)&size, sizeof(int), 0); //nhan file size
-			char* filebuf = new char[size];
-			recv(Server, filebuf, size, 0); //nhan noi dung file duoi dang binary
-
-			string fileName = buffer; //fileName = +client A gui file [D:\\test.txt]
-			int a = fileName.find('[');
-			fileName.erase(0, a + 1);
-			fileName.erase(fileName.end() - 1);
-			int b = fileName.find_last_of('\\');
-			string cname = user.Id;
-			cname += "_";
-			fileName.insert(b + 1, cname); //fileName = D:\\clientB_test.txt
-
-			ofstream save(fileName, ios::binary);
-
-			save.write(filebuf, size);
-			save.close();
-		}
-
-		if (*buffer == '#')
-		{
-			cout << "Chat ended by server." << endl;
-			break;
-		}
-
-
+		recvMsg(Server, buffer);
 	}
 	delete[] buffer;
 }
@@ -376,43 +323,20 @@ void Client::sending(SOCKET &Server)
 		cin.getline(sendMsg, 1024);
 		lenMsg = strlen(sendMsg);
 		sendMsg[lenMsg] = '\0';
-		if (*sendMsg == '+') //send File  vd: +D:\\test.txt
-		{
-			string fileName = sendMsg;
-			fileName.erase(fileName.begin()); //xoa dau +
 
-			ifstream source(fileName, ios::binary);
-			if (source.is_open())
+		if (getMsg(Server, sendMsg, lenMsg)) continue;
+
+		else
+		{
+			iResult = send(Server, sendMsg, sizeof(sendMsg), 0);
+			if (iResult == SOCKET_ERROR)
 			{
-				//get file size
-				source.seekg(0, ios::end);
-				int size = source.tellg();
-				source.seekg(0);
-				char* buffer = new char[size];
-
-				source.read(buffer, size);
-				send(Server, sendMsg, sizeof(sendMsg), 0); //gui ten file
-				send(Server, (char*)&size, sizeof(int), 0); //gui file size
-				send(Server, buffer, size, 0); //gui noi dung file duoi dang binary
-				delete[] buffer;
-				source.close();
+				cout << "Send failed with error: " << WSAGetLastError() << endl;
+				cout << "Your connection is terminated." << endl;
+				closesocket(Server);
+				WSACleanup();
+				return;
 			}
-		}
-		else iResult = send(Server, sendMsg, sizeof(sendMsg), 0);
-
-		if (*sendMsg == '#')
-		{
-			cout << "Disconnected..." << endl;
-			closesocket(Server);
-			WSACleanup();
-			return;
-		}
-		if (iResult == SOCKET_ERROR)
-		{
-			printf("send failed with error: %d\n", WSAGetLastError());
-			closesocket(Server);
-			WSACleanup();
-			return;
 		}
 	}
 
@@ -511,4 +435,181 @@ int Client::start()
 	WSACleanup();
 	system("pause");
 	return 0;
+}
+
+
+
+/// SEND
+
+void Client::showInstruction()
+{
+	cout << "\tINSTRUCTION :" << endl;
+	cout << "1. /1             | Display the list of online users." << endl;
+	cout << "2. /2             | Display the list of files ." << endl;
+	cout << "3. /[Username]    | Chat privately." << endl;
+	cout << "4. /[File's no]   | Download the file's [no]." << endl;
+	cout << "5. +[pathFileName]| Send file by inputing path File ." << endl;
+	cout << "6. #              | End connection." << endl;
+}
+
+bool Client::getMsg(SOCKET Server, char sendMsg[], int lenMsg)
+{
+	string option = sendMsg;
+	if (option == "/0")
+	{
+		showInstruction();
+		return true;
+	}
+	else if (option == "/1")
+	{
+		getOnlineUser();
+		return true;
+	}
+	else if (option == "/2")
+	{
+		getFilelist();
+		return true;
+	}
+	else if (option == "#")
+	{
+		int iResult = send(Server, sendMsg, LenMsg, 0);
+		cout << "Disconnected..." << endl;
+		closesocket(Server);
+		WSACleanup();
+		return true;
+	}
+	else if (option[0] == '+' && option[2] == ':' && option[3] == '\\')
+	{
+		sendFile(Server, sendMsg);
+		return true;
+	}
+	else if (option.find("/download") == 0)
+	{
+		downloadFile(option);
+		return true;
+	}
+	return false;
+}
+void Client::getOnlineUser()
+{
+	cout << "Online User: ";
+	for (int i = 0; i < onlineUser.size(); i++)
+	{
+		cout << onlineUser[i] << ' ';
+	}
+	cout << endl;
+}
+void Client::getFilelist()
+{
+	cout << "List file: " << endl;
+	if (fileList.size() == 0)
+	{
+		return;
+	}
+	for (int i = 0; i < fileList.size(); i++)
+	{
+		cout << i + 1 << ". " << fileList[i].name << endl;
+	}
+}
+void Client::downloadFile(string option)
+{
+	//option = /download 5
+	string i = option.substr(option.find_first_of(' ') + 1, option.length()); // i = 5
+	int pos = stoi(i);
+	if (pos < fileList.size()) 
+	{
+		int b = fileList[pos - 1].name.find_last_of('\\');
+		string cname = user.Id;
+		cname += "_";
+		string fileeeee = fileList[pos - 1].name.insert(b + 1, cname); //fileName = D:\clientB_test.txt
+
+		ofstream save(fileeeee, ios::binary);
+		save.write(fileList[pos - 1].filebuf, fileList[pos - 1].size);
+		save.close();
+	}
+	else cout << "File does not exist." << endl;
+}
+
+void Client::sendFile(SOCKET Server, char sendMsg[])
+{
+	string fileName = sendMsg;
+	fileName.erase(fileName.begin()); //xoa dau +
+
+	ifstream source(fileName, ios::binary);
+	if (source.is_open())
+	{
+		//get file size
+		source.seekg(0, ios::end);
+		int size = source.tellg();
+		source.seekg(0);
+		char* buffer = new char[size];
+
+		source.read(buffer, size);
+		send(Server, sendMsg, sizeof(sendMsg), 0); //gui ten file: +D:\test.txt
+		send(Server, (char*)& size, sizeof(int), 0); //gui file size
+		send(Server, buffer, size, 0); //gui noi dung file duoi dang binary
+		delete[] buffer;
+		source.close();
+	}
+	else
+	{
+		cout << "File does not exist." << endl;
+	}
+}
+
+/// RECIEVE
+bool Client::recvMsg(SOCKET Server, char buffer[])
+{
+	string buf = buffer;
+	if (buf.find(':') == -1) //logged out/in
+	{
+		updateUserlist(buf);
+		return true;
+	}
+	else if (buf[0] == '+')  //nhan file 
+	{
+		recvFile(Server, buf);
+		return true;
+	}
+}
+void Client::updateUserlist(string buf)
+{
+	string name = buf.substr(0, buf.find_first_of(' '));
+	buf.erase(0, buf.find_first_of(' ') + 1);
+	if (buf == "logged out")
+	{
+		for (int i = 0; i < onlineUser.size(); i++)
+		{
+			if (onlineUser[i] == name)
+			{
+				onlineUser.erase(onlineUser.begin() + i);
+				return;
+			}
+		}
+	}
+	else if (buf == "logged in")
+	{
+		onlineUser.push_back(name);
+		return;
+	}
+}
+void Client::recvFile(SOCKET Server, string buf)
+{
+	int size;
+	recv(Server, (char*)& size, sizeof(int), 0); //nhan file size
+	char* filebuf = new char[size];
+	recv(Server, filebuf, size, 0); //nhan noi dung file duoi dang binary
+
+	string fileName = buf; //fileName = +client A gui file [D:\test.txt]
+	int a = fileName.find('[');
+	int b = fileName.find(']');
+	fileName = fileName.substr(a + 1, b - a - 1); //fileName = D:\test.txt
+
+	File newfile;
+	newfile.name = fileName;
+	newfile.size = size;
+	newfile.filebuf = filebuf;
+	fileList.push_back(newfile);
+
+	delete[] filebuf;
 }

@@ -14,6 +14,7 @@
 #include <thread>
 #include <fstream>
 #include <conio.h>
+#include <winuser.h>
 // Need to link with Ws2_32.lib
 #pragma comment (lib, "Ws2_32.lib")
 
@@ -36,6 +37,9 @@ public:
 	int count = 0;
 
 	//---HAM HO TRO
+	void gotoxy(int x, int y);
+	int wherex();
+	int wherey();
 	string FormatStr(char*& buffer, int& mode, string userName);
 	bool checkUser(string name); //check trong vector UserList - luu nhung user dang online
 	int checkUser(char Id[], char Pass[]); //check trong file UserList.txt
@@ -43,4 +47,5 @@ public:
 	void sendUserList(int index);
 	void run(int index);
 	int start();
+	void printUserList();
 };

@@ -23,7 +23,12 @@ struct User
 	char Id[30] = { 0 };
 	char Password[30] = { 0 };
 };
-
+struct File
+{
+	string name;
+	char* filebuf;
+	int size;
+};
 class Client
 {
 public:
@@ -39,4 +44,20 @@ public:
 
 	User user;
 	vector<string> onlineUser;
+	vector<File> fileList;
+
+	//SEND
+	bool getMsg(SOCKET Server, char sendMsg[], int lenMsg);
+
+	void showInstruction();
+	void getOnlineUser();
+	void getFilelist();
+	void downloadFile(string option);
+	void sendFile(SOCKET Server, char sendMsg[]);
+
+	//RECIEVE
+	bool recvMsg(SOCKET Server, char buffer[]);
+
+	void updateUserlist(string buf);
+	void recvFile(SOCKET Server, string buf);
 };

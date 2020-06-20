@@ -48,10 +48,13 @@ using namespace std;
 
 void server::getUsername(int index)
 {
+	count++;
 	User newUser;
+	UserList.push_back(newUser);
 	char id[30], password[30];
 	char buffname[50];
-	bool check = TRUE;
+	isExisted.push_back(FALSE);
+	//bool check = TRUE;
 	// Save data in Server
 	int flag = 0; 
 	do {
@@ -90,10 +93,9 @@ void server::getUsername(int index)
 	string temp = id;
 	temp = temp + " logged in" + "\0";
 	cout << temp << endl;
-	newUser.Id = id;
 
-	UserList.push_back(newUser);
-	isExisted.push_back(check);
+	UserList[index].Id = id;
+	isExisted[index] = TRUE;
 
 	for (int i = 0; i < temp.length(); i++)  //copy lai buff vao buffer
 	{
@@ -132,8 +134,9 @@ void server::run(int index)
 {
 	index = index - 1;
 	getUsername(index);
-	count++;
-	//sendUserList(index);
+	//count++;
+	printUserList();
+	sendUserList(index);
 	char* temp = new char[LenMsg];
 	//receive(, msg);
 	int itemp = recv(ClientList[index], temp, LenMsg, 0);
@@ -146,10 +149,22 @@ void server::run(int index)
 
 		if (iResult == SOCKET_ERROR)
 		{
-			printf("recv failed with error: %d\n", WSAGetLastError());
+			*buffer = '#';
+			string name = FormatStr(buffer, mode, UserList[index].Id);
+			cout << buffer << endl; 
+			for (int i = 0; i < count; i++)
+			{
+				if (ClientList[i] == ClientList[index]) continue;
+				if (isExisted[i] == TRUE)
+				{
+					iResult = send(ClientList[i], buffer, LenMsg, 0);
+				}
+			}
+			// close socket
+			isExisted[index] = FALSE;
+			printUserList();
 			closesocket(ClientList[index]);
-			WSACleanup();
-			return; //bên kia nó đặt các biến struct ip trong class luon, tạo static pointer của server nua, nên cái thread ong moi viet bth dc á
+			return;
 		}
 
 		string name = FormatStr(buffer, mode, UserList[index].Id);
@@ -169,6 +184,7 @@ void server::run(int index)
 			}
 			// close socket
 			isExisted[index] = FALSE;
+			printUserList();
 			closesocket(ClientList[index]);
 			return;
 		}
@@ -250,7 +266,7 @@ string server::FormatStr(char*& buffer, int& mode, string userName)
 		}
 		else
 		{
-			buff = userName + ": " + "/" + name + buff;
+			buff = userName + ": " + "/ " + name + buff;
 			mode = 0;
 			name = "ALL";
 		}
@@ -425,4 +441,56 @@ int server::start()
 	WSACleanup();
 
 	return 0;
+}
+
+void server::gotoxy(int x, int y)
+{
+	static HANDLE h = NULL;
+	if (!h)
+	{
+		h = GetStdHandle(STD_OUTPUT_HANDLE);
+	}
+	COORD c = { x,y };
+	SetConsoleCursorPosition(h, c);
+}
+void server::printUserList()
+{
+	int a = wherex();
+	int b = wherey();
+	int x = 50, y = 3;
+	gotoxy(x, y);
+	cout << "Online Users:";
+	for (int i = 0; i < UserList.size(); i++)
+	{
+		y++;
+		gotoxy(x, y);
+		cout << "                 ";
+	}
+	y = 4;
+	for (int i = 0; i < UserList.size(); i++)
+	{
+		if (isExisted[i])
+		{
+			gotoxy(x, y);
+			cout << UserList[i].Id;
+			y++;
+		}
+	}
+	gotoxy(a, b);
+}
+
+int server::wherex()
+{
+	CONSOLE_SCREEN_BUFFER_INFO csbi;
+	if (!GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi))
+		return -1;
+	return csbi.dwCursorPosition.X;
+}
+
+int server::wherey()
+{
+	CONSOLE_SCREEN_BUFFER_INFO csbi;
+	if (!GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi))
+		return -1;
+	return csbi.dwCursorPosition.Y;
 }
