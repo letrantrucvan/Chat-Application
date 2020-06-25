@@ -1,50 +1,12 @@
-﻿//#define WIN32_LEAN_AND_MEAN
-//
-//#include <windows.h>
-//#include <winsock2.h>
-//#include <ws2tcpip.h>
-//#include <stdlib.h>
-//#include <stdio.h>
-//#include <iostream>
-//#include <string.h>
-//#include <string>
-//#include <cstring>
-//#include <vector>
-//#include <thread>
-//#include <fstream>
-//#include <conio.h>
-//// Need to link with Ws2_32.lib
-//#pragma comment (lib, "Ws2_32.lib")
-//// #pragma comment (lib, "Mswsock.lib")
+﻿
 #include "server.h"
 
 using namespace std;
 
 #define LenMsg 1024
-#define PORT "8080" // nè
-#define NumClient 100 // để đi có ảnh huong dau
+#define PORT "8080" 
+#define NumClient 100 
 #define FILE_LENGHT 1024*1024*5
-//
-//struct User
-//{
-//	string Id;
-//	string Password;
-//};
-//vector <User>  UserList;
-//vector <bool> isExisted;
-//
-//SOCKET ClientList[NumClient];
-//thread ClientThread[NumClient];
-//int count = 0;
-//
-////---HAM HO TRO
-//string FormatStr(char*& buffer, int& mode, string userName);
-//bool checkUser(string name); //check trong vector UserList - luu nhung user dang online
-//int checkUser(char Id[], char Pass[]); //check trong file UserList.txt
-//void getUsername(int index);
-//void sendUserList(int index);
-//void run(int index);
-//void start();
 
 void server::getUsername(int index)
 {
@@ -56,7 +18,7 @@ void server::getUsername(int index)
 	isExisted.push_back(FALSE);
 	//bool check = TRUE;
 	// Save data in Server
-	int flag = 0; 
+	int flag = 0;
 	do {
 		// receive name and password from client to check 
 		int iResult = recv(ClientList[index], id, 30, 0);
@@ -70,9 +32,9 @@ void server::getUsername(int index)
 		iResult = recv(ClientList[index], password, 30, 0);
 
 		int Check = checkUser(id, password); // check if the username is available
-		send(ClientList[index], (char*)&Check, sizeof(int), 0);
+		send(ClientList[index], (char*)& Check, sizeof(int), 0);
 		// recv thong bao dang nhap thanh cong + mode dnhap / dky
-		recv(ClientList[index], (char*)&flag, sizeof(int), 0);
+		recv(ClientList[index], (char*)& flag, sizeof(int), 0);
 
 	} while (flag == 0);
 
@@ -125,7 +87,7 @@ bool server::checkUser(string name)
 {
 	for (int i = 0; i < UserList.size(); i++)
 	{
-		if (UserList[i].Id == name)
+		if (UserList[i].Id == name && isExisted[i] == TRUE)
 			return true;
 	}
 	return false;
@@ -137,6 +99,8 @@ void server::run(int index)
 	//count++;
 	printUserList();
 	sendUserList(index);
+	printFileList();
+	sendFileList(index);
 	char* temp = new char[LenMsg];
 	//receive(, msg);
 	int itemp = recv(ClientList[index], temp, LenMsg, 0);
@@ -151,7 +115,7 @@ void server::run(int index)
 		{
 			*buffer = '#';
 			string name = FormatStr(buffer, mode, UserList[index].Id);
-			cout << buffer << endl; 
+			cout << buffer << endl;
 			for (int i = 0; i < count; i++)
 			{
 				if (ClientList[i] == ClientList[index]) continue;
@@ -197,7 +161,7 @@ void server::run(int index)
 				if (ClientList[i] == ClientList[index]) continue;
 				if (isExisted[i] == TRUE)
 				{
-					iResult = send(ClientList[i], buffer, LenMsg, 0); 
+					iResult = send(ClientList[i], buffer, LenMsg, 0);
 				}
 			}
 		}
@@ -216,60 +180,148 @@ void server::run(int index)
 				}
 			}
 		}
-		else if (mode == 5) //nhan va gui lai FILE
+
+		else if (mode == 3 || mode == 4) //nhan va pushback vao fileList
 		{
+
 			int size;
-			recv(ClientList[index], (char*)&size, sizeof(int), 0); //nhan file size
+			
+			recv(ClientList[index], (char*)& size, sizeof(int), 0); //nhan file size
 			char* filebuf = new char[size];
 			recv(ClientList[index], filebuf, size, 0); //nhan noi dung file duoi dang binary
+			File newFile;
+			newFile.size = size;
+			newFile.filebuf = new char[size];
+			newFile.filebuf = filebuf;
 
-			for (int i = 0; i < count; i++)
+			//lay ten file
+			string fileName = buffer;
+			int beg = fileName.find_last_of('\\');
+			int end = fileName.find_last_of(']');
+			fileName = fileName.substr(beg + 1, end - beg - 1);  // fileName = test.txt
+
+			newFile.name = fileName;
+			newFile.sender = UserList[index].Id;
+
+			if (mode == 3) newFile.recipient = "ALL";
+			else if (mode == 4) newFile.recipient = name;
+
+			fileList.push_back(newFile);
+
+			if (mode == 3)
 			{
-				if (ClientList[i] == ClientList[index]) continue;
-				if (isExisted[i] == TRUE)
+				for (int i = 0; i < count; i++)
 				{
-					send(ClientList[i], buffer, LenMsg, 0); //gui ten file
-					send(ClientList[i], (char*)&size, sizeof(int), 0); //gui file size
-					send(ClientList[i], filebuf, size, 0); //gui noi dung file
-					delete[] filebuf;
+					if (ClientList[i] == ClientList[index]) continue;
+					if (isExisted[i] == TRUE)
+					{
+						iResult = send(ClientList[i], buffer, LenMsg, 0);
+					}
 				}
 			}
+			else if (mode == 4)
+			{
+				for (int i = 0; i < count; i++)
+				{
+					if (ClientList[i] == ClientList[index]) continue;
+					if (UserList[i].Id == name)
+					{
+						if (isExisted[i] == TRUE)
+						{
+							iResult = send(ClientList[i], buffer, LenMsg, 0);
+
+						}
+					}
+				}
+			}
+			//delete[]filebuf;
+			printFileList();
+		}
+		else if (mode > 4) // send file downloaded to specific client
+		{
+			int i = mode - 5;
+			int size = fileList[i].size;
+			//(ClientList[i], buffer, LenMsg, 0);
+			send(ClientList[index], fileList[i].name.c_str(), LenMsg, 0); //send file's name   test.txt
+			send(ClientList[index], (char*)& size, sizeof(int), 0); //send size
+			send(ClientList[index], fileList[i].filebuf, size, 0); //send filebuf
 		}
 		delete[] buffer;
 	}
 	delete[] temp;
-
 }
-
+/* STATUS
+mode 0  : CHAT TO EVERYONE
+mode 1  : CHAT TO SPECIFIC CLIENT
+mode 2  : LOGGED OUT
+mode 3  : SEND FILE TO EVERYONE
+mode 4  : SEND FILE TO SPECIFIC CLIENT
+mode 5+X: DOWNLOAD FILE WITH INDEX X
+*/
 string server::FormatStr(char*& buffer, int& mode, string userName)
 {
 	string name;
 	string buff = buffer;
 
-	if (buff[0] == '/')	// Chat private						
+	if (buff[0] == '/' && buff.find("download") != 1)	// Chat or sendfile privately						
 	{
-		// buff = "/hoangminh hello"
-		buff.erase(buff.begin());  // buff = "hoangminh hello"
+		// buff = "/hoangminh hello"    /hoangminh +D:\text.txt
+		buff.erase(buff.begin());  // buff = "hoangminh hello" | buff = "hoangminh +D:\text.txt"
 		for (int i = 0; i < buff.length(); i++)
 		{
 			if (buff[i] == ' ')
 			{
 				name = buff.substr(0, i); // name = "hoangminh"
-				buff.erase(0, i + 1);		  // buff = "hello"
+				buff.erase(0, i + 1);		  // buff = "hello" | buff = "+D:\text.txt"
 				break;
 			}
 		}
 		if (checkUser(name))
 		{
-			buff = userName + " to " + name + " (privately): " + buff;
-			mode = 1;
+			if (buff[0] == '+' && buff[2] == ':' && buff[3] == '\\') // send file privately
+			{
+				buff.erase(buff.begin());
+				buff = "+" + userName + " sent file to " + name + " (privately): " + "[" + buff + "]";  //+clientA sent file to hoangminh (privately): [D:\text.txt]
+				mode = 4;
+			}
+			else
+			{
+				buff = userName + " to " + name + " (privately): " + buff;  //+clientA to hoangminh (privately): hello
+				mode = 1;
+			}
 		}
-		else
+		else //chat chung
 		{
 			buff = userName + ": " + "/ " + name + buff;
 			mode = 0;
 			name = "ALL";
 		}
+	}
+	/*
+Gui tin nhan download cho server: /download 1
+Format tin nhan download : lala requested to download file test.txt
+Gui tin nhan download cho client : gui name,size,buff
+*/
+	else if (buff.find("/download") == 0) //  /download 5
+	{
+		string i = buff.substr(buff.find_first_of(' ') + 1, buff.length()); // i = 5
+		int pos = stoi(i);
+		//pos = getFilepos
+		// Get file index in client side mapped to file index in server side
+		int dem = 0;
+		for (int i = 0; i < fileList.size(); i++)
+		{
+			if (dem == pos)
+			{
+				dem = i;
+				break;
+			}
+			if (fileList[i].recipient == "ALL" || fileList[i].recipient == userName || fileList[i].sender == userName)
+				dem++;
+		}
+		dem--;
+		buff = userName + " requested to download file " + fileList[dem].name;
+		mode = 5 + dem;
 	}
 	else if (buff[0] == '#')	// log out		
 	{
@@ -280,9 +332,9 @@ string server::FormatStr(char*& buffer, int& mode, string userName)
 	{
 		buff.erase(buff.begin());
 		buff = "+" + userName + " sent file " + "[" + buff + "]";  //+client A send file [D:\\client\\test.txt]
-		mode = 5;
+		mode = 3;
 	}
-	else  //chat chung ca dam
+	else  //chat chung 
 	{
 		// buff = "Xin chao cac ban!"
 		name = "ALL";
@@ -297,7 +349,6 @@ string server::FormatStr(char*& buffer, int& mode, string userName)
 	buffer[buff.length()] = '\0';
 	return name; // neu la chat private (A chat cho B) thi tra ve ten thang B, chat all thi tra ve "ALL"
 }
-
 
 int server::checkUser(char Id[], char Pass[])
 {
@@ -345,6 +396,7 @@ void server::sendUserList(int index)
 	result[user.length()] = '\0';
 	send(ClientList[index], result, user.length() + 1, 0); //gui ten cac onlineUser
 }
+
 int server::start()
 {
 	WSADATA wsaData;
@@ -427,10 +479,8 @@ int server::start()
 		else
 		{
 			ClientList[i] = Client;
-			//run(i);
-			//ClientThread[i] = thread(&server::run, i);
-			//std::thread newThread([&](server* client) { client->run(i); }, this);
-			ClientThread[i]= thread([&](server* client) { client->run(i); }, this);
+
+			ClientThread[i] = thread([&](server* client) { client->run(i); }, this);
 
 		}
 	}
@@ -457,7 +507,7 @@ void server::printUserList()
 {
 	int a = wherex();
 	int b = wherey();
-	int x = 50, y = 3;
+	int x = 60, y = 3;
 	gotoxy(x, y);
 	cout << "Online Users:";
 	for (int i = 0; i < UserList.size(); i++)
@@ -493,4 +543,50 @@ int server::wherey()
 	if (!GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi))
 		return -1;
 	return csbi.dwCursorPosition.Y;
+}
+
+void server::sendFileList(int index)
+{
+	string file = "";
+	for (int i = 0; i < fileList.size(); i++)
+	{
+		if (fileList[i].recipient == "ALL" || fileList[i].recipient == UserList[index].Id)
+		{
+			file += fileList[i].name;
+			file += " ";
+		}
+	}
+	file.erase(file.end());
+	file += '\0';
+	char* result = new char[file.length() + 1];
+	for (int i = 0; i < file.length(); i++)
+	{
+		result[i] = file[i];
+	}
+	result[file.length()] = '\0';
+	send(ClientList[index], result, file.length() + 1, 0); //gui filelist's name
+}
+
+void server::printFileList()
+{
+	int a = wherex();
+	int b = wherey();
+	int x = 80, y = 3;
+	gotoxy(x, y);
+	cout << "File List:";
+	for (int i = 0; i < fileList.size(); i++)
+	{
+		y++;
+		gotoxy(x, y);
+		cout << "                 ";
+	}
+
+	y = 4;
+	for (int i = 0; i < fileList.size(); i++)
+	{
+		gotoxy(x, y);
+		cout << i + 1 << ". " << fileList[i].name;
+		y++;
+	}
+	gotoxy(a, b);
 }

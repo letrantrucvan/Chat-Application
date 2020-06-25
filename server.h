@@ -26,26 +26,45 @@ struct User
 	string Id;
 	string Password;
 };
-class server 
+struct File
+{
+	string name;
+	char* filebuf;
+	int size;
+	string recipient;
+	string sender;
+};
+class server
 {
 public:
 	vector <User>  UserList;
 	vector <bool> isExisted;
+	vector <File> fileList;
 
 	SOCKET ClientList[NumClient];
 	thread ClientThread[NumClient];
 	int count = 0;
 
-	//---HAM HO TRO
+	//---HAM PRINT 
 	void gotoxy(int x, int y);
 	int wherex();
 	int wherey();
+
 	string FormatStr(char*& buffer, int& mode, string userName);
+
 	bool checkUser(string name); //check trong vector UserList - luu nhung user dang online
 	int checkUser(char Id[], char Pass[]); //check trong file UserList.txt
 	void getUsername(int index);
 	void sendUserList(int index);
-	void run(int index);
-	int start();
 	void printUserList();
+
+	void run(int index);
+
+	//FILE
+	void sendFileList(int index);
+	void printFileList();
+
+
+	//EXECUTE
+	int start();
 };
